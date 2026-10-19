@@ -1,0 +1,176 @@
+import { chromium } from "playwright-core";
+import Browserbase from "@browserbasehq/sdk";
+
+const bb = new Browserbase({
+  apiKey: process.env.BROWSERBASE_API_KEY,
+});
+
+export async function ranktracker(keyword, targetDomain) {
+  let browser;
+
+  try {
+    // 1. Create Browserbase session with Stealth features enabled
+    const session = await bb.sessions.create({
+      browserSettings: {
+        blockAds: true,
+      },
+    });
+
+    browser = await chromium.connectOverCDP(session.connectUrl);
+
+    // Browserbase handle contexts differently, let's make sure it exists
+    const context = browser.contexts()[0] || (await browser.newContext());
+    const page = context.pages()[0] || (await context.newPage());
+    page.setDefaultNavigationTimeout(45000);
+
+    const allResults = [];
+    let found = null;
+    const cleanTarget = targetDomain.replace(/^www\./i, "").toLowerCase();
+
+    // 2. Open Google Direct Search instead of home page first
+    for (let gPage = 0; gPage < 5; gPage++) {
+      const searchUrl =
+        `https://www.google.com/search?q=${encodeURIComponent(keyword)}` +
+        `&start=${gPage * 10}&num=10&hl=en&gl=us`;
+
+      console.log(`Scanning Google Page ${gPage + 1}...`);
+
+      //   await page.goto(searchUrl, {
+      //     waitUntil: "load", // Wait for full page load
+      //     timeout: 45000,
+      //   });
+      await page.goto(searchUrl, {
+        waitUntil: "domcontentloaded",
+        timeout: 45000,
+      });
+
+      console.log("Current URL:", page.url());
+      console.log("Page title:", await page.title());
+
+      const debugInfo = await page.evaluate(() => ({
+        title: document.title,
+        bodyText: document.body?.innerText?.slice(0, 1000),
+        resultCount: document.querySelectorAll("div.g h3").length,
+        headingCount: document.querySelectorAll("h3").length,
+      }));
+
+      console.log("Google Debug Info:", debugInfo);
+
+      let pageResults = [];
+
+      // Retry extraction up to 3 times
+      for (let retry = 0; retry < 3; retry++) {
+        try {
+          // Precise selector: Target primary organic search titles
+          await page.waitForSelector("div.g h3", { timeout: 10000 });
+          await page.waitForTimeout(1000); // Small human-like wait
+
+          pageResults = await page.evaluate(() => {
+            // Target the actual organic result containers to avoid 'People Also Ask' noise
+            const elements = document.querySelectorAll("div.g");
+
+            return Array.from(elements)
+              .map((el) => {
+                const h3 = el.querySelector("h3");
+                const a = el.querySelector("a");
+
+                if (!h3 || !a || !a.href.startsWith("http")) return null;
+
+                const url = a.href;
+                try {
+                  const parsedUrl = new URL(url);
+
+                  // Ignore Google properties
+                  if (
+                    parsedUrl.hostname === "google.com" ||
+                    parsedUrl.hostname.endsWith(".google.com") ||
+                    parsedUrl.hostname === "googleusercontent.com"
+                  ) {
+                    return null;
+                  }
+
+                  // Extract cleaner snippet
+                  const snippetEl = el.querySelector(
+                    "div[style*='-webkit-line-clamp'], .VwiC3b",
+                  );
+                  const snippet = snippetEl ? snippetEl.innerText.trim() : "";
+
+                  return {
+                    url,
+                    domain: parsedUrl.hostname
+                      .replace(/^www\./i, "")
+                      .toLowerCase(),
+                    title: h3.innerText.trim(),
+                    snippet: snippet.substring(0, 300),
+                  };
+                } catch {
+                  return null;
+                }
+              })
+              .filter(Boolean);
+          });
+
+          if (pageResults.length > 0) break;
+        } catch (error) {
+          console.log(`Attempt ${retry + 1} failed: ${error.message}`);
+        }
+
+        if (retry < 2) {
+          await page.waitForTimeout(2000);
+          await page.reload({ waitUntil: "load" });
+        }
+      }
+
+      // MODIFIED: Changed 'break' to 'continue' to not stop the whole loop if one page fails
+      if (pageResults.length === 0) {
+        console.log(`Skipping page ${gPage + 1} due to zero extraction.`);
+        continue;
+      }
+
+      // 3. Process rankings
+      for (const result of pageResults) {
+        if (allResults.some((item) => item.url === result.url)) continue;
+
+        result.position = allResults.length + 1;
+        allResults.push(result);
+
+        const domainMatches =
+          result.domain === cleanTarget ||
+          result.domain.endsWith(`.${cleanTarget}`);
+
+        if (domainMatches) {
+          found = { ...result, page: gPage + 1 };
+          break;
+        }
+      }
+
+      if (found) break;
+      await page.waitForTimeout(2000); // Safe delay between pages
+    }
+
+    const competitors = allResults
+      .filter((result) => result.domain !== cleanTarget)
+      .slice(0, 10);
+
+    return {
+      success: true,
+      data: {
+        keyword,
+        targetDomain,
+        position: found?.position ?? null,
+        page: found?.page ?? null,
+        title: found?.title ?? "",
+        snippet: found?.snippet ?? "",
+        competitors,
+        totalResultsScanned: allResults.length,
+      },
+    };
+  } catch (error) {
+    console.error("Rank check error:", error.message);
+    return { success: false, error: error.message };
+  } finally {
+    if (browser) {
+      await browser.close().catch(() => {});
+    }
+  }
+}
