@@ -1,33 +1,33 @@
 import mongoose from "mongoose";
 
 const issueSchema = new mongoose.Schema({
-    severity: { type: String, enum: ["critical", "warning", "info"], required: true},
-    category: {type: String, required: true},
-    message: {type: String, required: true},
-    recommendation: {type: String, required: true},
-}, {_id: false})
+    severity: { type: String, enum: ["critical", "warning", "info"], required: true },
+    category: { type: String, required: true },
+    message: { type: String, required: true },
+    recommendation: { type: String, required: true },
+}, { _id: false })
 
 const analysisSchema = new mongoose.Schema({
-    userId: {type: mongoose.Schema.Types.ObjectId, ref: "User", required: true},
-    url: {type: String, required: true},
-    overallScore: {type: Number, min: 0, max: 100, default: 0},
+    userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
+    url: { type: String, required: true },
+    overallScore: { type: Number, min: 0, max: 100, default: 0 },
     categories: {
-        seo: {type: Number, default: 0},
-        performance: {type: Number, default: 0},
-        accessibility: {type: Number, default: 0},
-        bestPractices: {type: Number, default: 0},
+        seo: { type: Number, default: 0 },
+        performance: { type: Number, default: 0 },
+        accessibility: { type: Number, default: 0 },
+        bestPractices: { type: Number, default: 0 },
     },
     metaData: {
-        title: { type: String, default: ""},
-        description: { type: String, default: ""},
-        canonical: { type: String, default: ""},
-        robots: { type: String, default: ""},
-        ogTitle: { type: String, default: ""},
-        ogDescription: { type: String, default: ""},
-        ogImage: { type: String, default: ""},
-        twitterCard: { type: String, default: ""},
-        viewport: { type: String, default: ""},
-        charset: { type: String, default: ""},
+        title: { type: String, default: "" },
+        description: { type: String, default: "" },
+        canonical: { type: String, default: "" },
+        robots: { type: String, default: "" },
+        ogTitle: { type: String, default: "" },
+        ogDescription: { type: String, default: "" },
+        ogImage: { type: String, default: "" },
+        twitterCard: { type: String, default: "" },
+        viewport: { type: String, default: "" },
+        charset: { type: String, default: "" },
     },
 
     headings: {
@@ -41,10 +41,10 @@ const analysisSchema = new mongoose.Schema({
     },
 
     links: {
-      internal: { type: Number, default: 0 },
-      external: { type: Number, default: 0 },
-      broken: { type: Number, default: 0 },
-      totel: { type: Number, default: 0 },
+        internal: { type: Number, default: 0 },
+        external: { type: Number, default: 0 },
+        broken: { type: Number, default: 0 },
+        totel: { type: Number, default: 0 },
     },
 
     images: {
@@ -65,7 +65,7 @@ const analysisSchema = new mongoose.Schema({
     pageSize: { type: Number, default: 0 },
     wordCount: { type: Number, default: 0 },
     status: { type: String, enum: ["pending", "processing", "completed", "failed"], default: "pending" },
-}, {timeseries: true})
+}, { timeseries: true })
 
 const Analysis = mongoose.model('Analysis', analysisSchema)
 

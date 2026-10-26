@@ -11,6 +11,7 @@ import authRouter from "./routes/authRoutes.js";
 import rankRouter from "./routes/renkRoutes.js";
 import analysisRouter from "./routes/analysisRoutes.js";
 import { startRankTrackingCron } from "./cron/rankTrackingCron.js";
+import adminRouter from "./routes/adminRoutes.js";
 
 
 connectDB()
@@ -20,12 +21,13 @@ const app = express()
 app.use(cors())
 app.use(express.json())
 
-app.get("/", function(req,res){
+app.get("/", function (req, res) {
     res.send("Server is running")
 })
 app.use("/api/auth", authRouter)
 app.use("/api/rank", rankRouter)
 app.use("/api/analysis", analysisRouter)
+app.use("/api/admin", adminRouter)
 
 //start cron jobs
 startRankTrackingCron()

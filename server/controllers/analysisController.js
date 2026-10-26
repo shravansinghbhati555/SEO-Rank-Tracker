@@ -1,13 +1,18 @@
+
 import mongoose from "mongoose";
 import Analysis from "../models/Analysis.js";
 import { analyzeSeoData } from "../services/geminiService.js";
 import { scrapeUrl } from "../services/scraperService.js";
+import User from "../models/User.js";
 
 // Analyze URL
 export const analyzeUrl = async (req, res) => {
+  let creditDeducted = false;
+
   try {
     const { url } = req.body || {};
 
+    // Step 1: Validate URL
     if (!url || typeof url !== "string" || !url.trim()) {
       return res.status(400).json({
         success: false,
@@ -19,8 +24,9 @@ export const analyzeUrl = async (req, res) => {
 
     try {
       const input = url.trim();
+
       validUrl = new URL(
-        /^https?:\/\//i.test(input) ? input : `https://${input}`,
+        /^https?:\/\//i.test(input) ? input : `https://${input}`
       );
 
       if (!["http:", "https:"].includes(validUrl.protocol)) {
@@ -33,48 +39,110 @@ export const analyzeUrl = async (req, res) => {
       });
     }
 
-    // Create database record first.
-    const analysis = await Analysis.create({
-      userId: req.userId,
-      url: validUrl.href,
-      status: "processing",
-    });
+    // Step 2: Check user and deduct one credit atomically
+    const user = await User.findOneAndUpdate(
+      {
+        _id: req.userId,
+        analysisEnabled: { $ne: false },
+        credits: { $gte: 1 },
+      },
+      {
+        $inc: { credits: -1 },
+      },
+      {
+        new: true,
+      }
+    );
 
-    // Respond immediately; analysis continues in the background.
+    if (!user) {
+      const existingUser = await User.findById(req.userId)
+        .select("credits analysisEnabled");
+
+      if (!existingUser) {
+        return res.status(404).json({
+          success: false,
+          message: "User not found",
+        });
+      }
+
+      if (existingUser.analysisEnabled === false) {
+        return res.status(403).json({
+          success: false,
+          message:
+            "Your analysis access has been disabled by admin.",
+        });
+      }
+
+      return res.status(403).json({
+        success: false,
+        message: "No credits remaining. Please contact admin.",
+        credits: existingUser.credits ?? 0,
+      });
+    }
+
+    creditDeducted = true;
+
+    // Step 3: Create analysis record
+    let analysis;
+
+    try {
+      analysis = await Analysis.create({
+        userId: req.userId,
+        url: validUrl.href,
+        status: "processing",
+      });
+    } catch (error) {
+      // Refund credit if analysis record creation fails
+      await User.updateOne(
+        { _id: req.userId },
+        { $inc: { credits: 1 } }
+      );
+
+      creditDeducted = false;
+      throw error;
+    }
+
+    // Step 4: Respond immediately
     res.status(202).json({
       success: true,
       message: "Analysis started",
       analysisId: analysis._id,
+      credits: user.credits,
     });
 
-    // Background processing
+    // Step 5: Run SEO analysis in the background
     (async () => {
       try {
-        // Step 1: Scrape the URL using the Analysis document ID.
+        // Scrape website
         const scrapeResult = await scrapeUrl(analysis._id);
 
-        if (!scrapeResult.success) {
-          throw new Error(scrapeResult.message || "Website scraping failed");
+        if (!scrapeResult?.success || !scrapeResult.data) {
+          throw new Error(
+            scrapeResult?.message || "Website scraping failed"
+          );
         }
 
-        // Step 2: Analyze the scraped data with Gemini.
+        // Analyze scraped data using Gemini
         const aiResult = await analyzeSeoData(scrapeResult.data);
 
         if (!aiResult?.success || !aiResult.data) {
-          throw new Error(aiResult?.message || "AI SEO analysis failed");
+          throw new Error(
+            aiResult?.message || "AI SEO analysis failed"
+          );
         }
 
         const seoData = scrapeResult.data;
         const aiData = aiResult.data;
 
-        // Step 3: Save final analysis.
+        // Save analysis results
         analysis.overallScore = aiData.overallScore ?? 0;
         analysis.categories = aiData.categories ?? {};
         analysis.metaData = seoData.metaData ?? {};
         analysis.headings = seoData.headings ?? {};
         analysis.links = seoData.links ?? {};
         analysis.images = seoData.images ?? {};
-        analysis.keywords = aiData.keywords ?? seoData.keywords ?? [];
+        analysis.keywords =
+          aiData.keywords ?? seoData.keywords ?? [];
         analysis.issues = aiData.issues ?? [];
         analysis.loadTime = seoData.loadTime ?? 0;
         analysis.pageSize = seoData.pageSize ?? 0;
@@ -96,12 +164,30 @@ export const analyzeUrl = async (req, res) => {
           analysis.status = "failed";
           await analysis.save();
         } catch (saveError) {
-          console.error("Failed to save analysis status:", saveError.message);
+          console.error(
+            "Failed to save analysis status:",
+            saveError.message
+          );
         }
       }
     })();
   } catch (error) {
     console.error("Analyze URL error:", error.message);
+
+    // Refund credit if deducted but no response was sent
+    if (creditDeducted && !res.headersSent) {
+      try {
+        await User.updateOne(
+          { _id: req.userId },
+          { $inc: { credits: 1 } }
+        );
+      } catch (refundError) {
+        console.error(
+          "Credit refund error:",
+          refundError.message
+        );
+      }
+    }
 
     if (!res.headersSent) {
       return res.status(500).json({
@@ -153,11 +239,16 @@ export const getAnalysis = async (req, res) => {
 // Get all analyses for the logged-in user
 export const getAnalyses = async (req, res) => {
   try {
-    const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
+    const page = Math.max(
+      parseInt(req.query.page, 10) || 1,
+      1
+    );
+
     const limit = Math.min(
       Math.max(parseInt(req.query.limit, 10) || 10, 1),
-      100,
+      100
     );
+
     const skip = (page - 1) * limit;
 
     const [analyses, total] = await Promise.all([
@@ -167,7 +258,10 @@ export const getAnalyses = async (req, res) => {
         .limit(limit)
         .select("-issues -keywords")
         .lean(),
-      Analysis.countDocuments({ userId: req.userId }),
+
+      Analysis.countDocuments({
+        userId: req.userId,
+      }),
     ]);
 
     return res.json({

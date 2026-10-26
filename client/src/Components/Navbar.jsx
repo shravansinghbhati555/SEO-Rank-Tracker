@@ -1,5 +1,7 @@
 import { Link, useNavigate, useLocation } from "react-router-dom";
+import { useApp } from "../Context/AppContext";
 import { useTheme } from "../Context/ThemeContext";
+import { useState, useEffect } from "react";
 import {
   Search,
   BarChart3,
@@ -10,10 +12,9 @@ import {
   Sun,
   Moon,
   ChartNoAxesColumnIcon,
+  LogOut,
+  ShieldCheck,
 } from "lucide-react";
-import { useState } from "react";
-import { useApp } from "../Context/AppContext";
-import { LogOut } from "lucide-react";
 
 export default function Navbar() {
   const { user, logout } = useApp();
@@ -33,6 +34,15 @@ export default function Navbar() {
   const isActive = (path) => location.pathname === path;
 
   const navLinks = [
+    ...(user?.role === "admin"
+      ? [
+          {
+            path: "/admin",
+            label: "Admin",
+            icon: <ShieldCheck size={18} />,
+          },
+        ]
+      : []),
     {
       path: "/dashboard",
       label: "Dashboard",
@@ -127,7 +137,7 @@ export default function Navbar() {
                   </span>
 
                   <span className="px-2 py-0.5 rounded-full text-[10px] font-medium uppercase bg-accent/10 border border-accent/15 text-accent">
-                    {user.plan}
+                    {user.role === "admin" ? "Admin" : user.plan}
                   </span>
                 </div>
 
@@ -239,7 +249,7 @@ export default function Navbar() {
                   }}
                   className="flex items-center gap-3 px-3 py-3 rounded-lg text-sm text-danger hover:bg-danger/10 w-full mt-2"
                 >
-                  <logout size={18} />
+                  <LogOut size={18} />
                   Logout
                 </button>
               </>
