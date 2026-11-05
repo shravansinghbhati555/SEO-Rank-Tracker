@@ -9,7 +9,9 @@ const userSchema = new mongoose.Schema({
     role: { type: String, enum: ["user", "admin"], default: "user" },
     analysisEnabled: { type: Boolean, default: true },
     analysisCount: { type: Number, default: 0 },
-    lastAnalysisDate: { type: Date, default: null }
+    lastAnalysisDate: { type: Date, default: null },
+    currentPlanId:{type: String, enum: ["plan-1", "plan-2", "plan-3"], default: null},
+    planExpiresAt: {type: Date, default: null},
 }, { timestamps: true })
 
 const User = mongoose.model("User", userSchema)

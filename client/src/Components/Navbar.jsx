@@ -1,7 +1,7 @@
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { useApp } from "../Context/AppContext";
 import { useTheme } from "../Context/ThemeContext";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import {
   Search,
   BarChart3,
@@ -14,11 +14,11 @@ import {
   ChartNoAxesColumnIcon,
   LogOut,
   ShieldCheck,
+  Coins,
 } from "lucide-react";
 
 export default function Navbar() {
   const { user, logout } = useApp();
-
   const { theme, setTheme } = useTheme();
 
   const navigate = useNavigate();
@@ -28,44 +28,45 @@ export default function Navbar() {
 
   const handleLogout = () => {
     logout();
+    setMobileOpen(false);
     navigate("/");
   };
 
   const isActive = (path) => location.pathname === path;
 
-  const navLinks = [
-    ...(user?.role === "admin"
+  // Role-based navigation
+  const navLinks =
+    user?.role === "admin"
       ? [
           {
             path: "/admin",
-            label: "Admin",
+            label: "Admin Dashboard",
             icon: <ShieldCheck size={18} />,
           },
         ]
-      : []),
-    {
-      path: "/dashboard",
-      label: "Dashboard",
-      icon: <BarChart3 size={18} />,
-    },
-    {
-      path: "/analyze",
-      label: "Analyze",
-      icon: <Search size={18} />,
-    },
-    {
-      path: "/rank-tracker",
-      label: "Rank Tracker",
-      icon: <Target size={18} />,
-    },
-    {
-      path: "/history",
-      label: "History",
-      icon: <History size={18} />,
-    },
-  ];
+      : [
+          {
+            path: "/dashboard",
+            label: "Dashboard",
+            icon: <BarChart3 size={18} />,
+          },
+          {
+            path: "/analyze",
+            label: "Analyze",
+            icon: <Search size={18} />,
+          },
+          {
+            path: "/rank-tracker",
+            label: "Rank Tracker",
+            icon: <Target size={18} />,
+          },
+          {
+            path: "/history",
+            label: "History",
+            icon: <History size={18} />,
+          },
+        ];
 
-  // Toggle between light and dark
   const toggleTheme = () => {
     setTheme(theme === "dark" ? "light" : "dark");
   };
@@ -77,7 +78,6 @@ export default function Navbar() {
           {/* Logo */}
           <Link to="/" className="flex items-center gap-2 group">
             <ChartNoAxesColumnIcon className="text-foreground" />
-
             <span className="text-xl tracking-tight text-foreground">
               Rank Pilot
             </span>
@@ -108,28 +108,32 @@ export default function Navbar() {
             {/* Theme Toggle */}
             <button
               onClick={toggleTheme}
-              className="p-2 text-muted-foreground hover:text-foreground hover:bg-muted rounded-full transition-colors flex items-center justify-center"
+              className="p-2 text-muted-foreground hover:text-foreground hover:bg-muted rounded-full transition-colors"
               aria-label="Toggle theme"
-              title={
-                theme === "dark"
-                  ? "Switch to light mode"
-                  : "Switch to dark mode"
-              }
             >
               {theme === "dark" ? <Sun size={18} /> : <Moon size={18} />}
             </button>
 
             {user ? (
               <>
+                {/* Credits - Only for normal users */}
+                {user?.role !== "admin" && (
+                  <div className="flex items-center gap-2 px-3 py-2 rounded-full border border-border bg-card text-sm">
+                    <Coins size={17} className="text-accent" />
+                    <span className="text-muted-foreground">Credits:</span>
+                    <span className="font-bold text-foreground">
+                      {user?.credits ?? 0}
+                    </span>
+                  </div>
+                )}
+
                 {/* User */}
                 <div className="flex items-center gap-2 px-2 py-1.5 rounded-full border border-border bg-card text-sm">
                   <div
                     className="w-6 h-6 rounded-full bg-primary flex items-center justify-center text-xs font-bold"
-                    style={{
-                      color: "var(--background)",
-                    }}
+                    style={{ color: "var(--background)" }}
                   >
-                    {user.name.charAt(0).toUpperCase()}
+                    {user.name?.charAt(0).toUpperCase()}
                   </div>
 
                   <span className="text-foreground font-medium">
@@ -154,17 +158,15 @@ export default function Navbar() {
               <>
                 <Link
                   to="/login"
-                  className="px-4 py-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+                  className="px-4 py-2 text-sm font-medium text-muted-foreground hover:text-foreground"
                 >
                   Log In
                 </Link>
 
                 <Link
                   to="/register"
-                  className="px-5 py-2 rounded-full bg-primary text-sm transition-opacity"
-                  style={{
-                    color: "var(--background)",
-                  }}
+                  className="px-5 py-2 rounded-full bg-primary text-sm"
+                  style={{ color: "var(--background)" }}
                 >
                   Get Started
                 </Link>
@@ -172,21 +174,20 @@ export default function Navbar() {
             )}
           </div>
 
-          {/* Mobile */}
+          {/* Mobile Controls */}
           <div className="flex items-center gap-2 md:hidden">
-            {/* Mobile Theme */}
             <button
               onClick={toggleTheme}
-              className="p-2 text-muted-foreground hover:text-foreground hover:bg-muted rounded-full transition-colors"
+              className="p-2 text-muted-foreground hover:text-foreground hover:bg-muted rounded-full"
               aria-label="Toggle theme"
             >
               {theme === "dark" ? <Sun size={18} /> : <Moon size={18} />}
             </button>
 
-            {/* Mobile Menu */}
             <button
               className="text-muted-foreground hover:text-foreground p-2"
               onClick={() => setMobileOpen(!mobileOpen)}
+              aria-label="Toggle menu"
             >
               {mobileOpen ? <X size={24} /> : <Menu size={24} />}
             </button>
@@ -196,7 +197,7 @@ export default function Navbar() {
 
       {/* Mobile Menu */}
       {mobileOpen && (
-        <div className="md:hidden border-b border-border bg-background origin-top">
+        <div className="md:hidden border-b border-border bg-background">
           <div className="px-4 py-3 space-y-1">
             {user ? (
               <>
@@ -204,22 +205,31 @@ export default function Navbar() {
                 <div className="flex items-center gap-3 px-3 py-3 mb-2 bg-muted rounded-lg">
                   <div
                     className="w-10 h-10 rounded-full bg-primary flex items-center justify-center text-sm font-bold"
-                    style={{
-                      color: "var(--background)",
-                    }}
+                    style={{ color: "var(--background)" }}
                   >
-                    {user.name.charAt(0).toUpperCase()}
+                    {user.name?.charAt(0).toUpperCase()}
                   </div>
 
                   <div>
                     <div className="text-sm font-semibold text-foreground">
                       {user.name}
                     </div>
-
                     <div className="text-xs text-muted-foreground">
                       {user.email}
                     </div>
                   </div>
+                </div>
+
+                {/* Mobile Credits */}
+                <div className="flex items-center justify-between px-3 py-3 mb-2 rounded-lg border border-border bg-card">
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Coins size={18} className="text-accent" />
+                    Available Credits
+                  </div>
+
+                  <span className="font-bold text-foreground">
+                    {user.credits ?? 0}
+                  </span>
                 </div>
 
                 {/* Mobile Links */}
@@ -243,10 +253,7 @@ export default function Navbar() {
 
                 {/* Mobile Logout */}
                 <button
-                  onClick={() => {
-                    handleLogout();
-                    setMobileOpen(false);
-                  }}
+                  onClick={handleLogout}
                   className="flex items-center gap-3 px-3 py-3 rounded-lg text-sm text-danger hover:bg-danger/10 w-full mt-2"
                 >
                   <LogOut size={18} />
@@ -267,9 +274,7 @@ export default function Navbar() {
                   to="/register"
                   onClick={() => setMobileOpen(false)}
                   className="block px-3 py-3 text-sm font-semibold text-center rounded-lg bg-primary"
-                  style={{
-                    color: "var(--background)",
-                  }}
+                  style={{ color: "var(--background)" }}
                 >
                   Get Started
                 </Link>
